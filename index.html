@@ -111,6 +111,7 @@
       <div class="lib-tools" style="flex-wrap:wrap;">
         <select id="eventFilter" style="flex:1;min-width:120px;"><option value="">All Tracks</option></select>
         <button id="newEvent">+ Program</button>
+        <button id="addToEvent">Add Sel→Program</button>
       </div>
       <div class="lib-list" id="libList"></div>
       <div class="lib-footer">
@@ -370,12 +371,6 @@ function renderLibrary(){
       if(e.target.classList.contains('play')) return;
       if(selectedTrackIds.has(t.id)) selectedTrackIds.delete(t.id); else selectedTrackIds.add(t.id);
       row.classList.toggle('selected');
-      // auto-add to active program
-      const pid=document.getElementById('eventFilter').value;
-      if(pid){
-        const ev=events.find(e=>e.id===pid);
-        if(ev && !ev.trackIds.includes(t.id)){ ev.trackIds.push(t.id); dbPut('events',ev).then(()=>{refreshEvents(); applyFilter();}); }
-      }
     });
     row.querySelector('.play').addEventListener('click',e=>{
       e.stopPropagation();
@@ -487,11 +482,19 @@ function delEvent(){
   dbDel('events',id).then(()=>{refreshEvents(); document.getElementById('eventFilter').value=''; applyFilter(); toast('Program deleted');});
 }
 function addToEvent(){
-  const id=document.getElementById('eventFilter').value;
-  if(!id){ toast('Pumili muna ng program'); return;}
-  const ev=events.find(e=>e.id===id);
-  if(!ev) return;
   if(selectedTrackIds.size===0){ toast('Pumili muna ng tracks (click sa library)'); return;}
+  if(events.length===0){ toast('Gumawa muna ng program (+ Program)'); return;}
+  let ev=null;
+  if(events.length===1){ ev=events[0]; }
+  else {
+    const list=events.map((e,i)=>(i+1)+'. '+e.name).join('\\n');
+    const ans=prompt('Pumili ng program (type number o pangalan):\\n'+list);
+    if(!ans) return;
+    const n=parseInt(ans);
+    if(!isNaN(n) && n>=1 && n<=events.length) ev=events[n-1];
+    else ev=events.find(e=>e.name.toLowerCase()===ans.toLowerCase());
+  }
+  if(!ev){ toast('Hindi makita ang program'); return; }
   selectedTrackIds.forEach(tid=>{ if(!ev.trackIds.includes(tid)) ev.trackIds.push(tid);});
   dbPut('events',ev).then(()=>{refreshEvents(); toast('Nadagdag sa '+ev.name+': '+selectedTrackIds.size); selectedTrackIds.clear(); renderLibrary();});
 }
@@ -726,6 +729,7 @@ async function init(){
   document.getElementById('fillAll').addEventListener('click',fillAllBanks);
   document.getElementById('eventFilter').addEventListener('change',applyFilter);
   document.getElementById('newEvent').addEventListener('click',newEvent);
+  document.getElementById('addToEvent').addEventListener('click',addToEvent);
   document.getElementById('prevBank').addEventListener('click',()=>{if(currentBank>0){currentBank--;document.getElementById('bankSelect').value=currentBank;renderPads();}});
   document.getElementById('nextBank').addEventListener('click',()=>{if(currentBank<totalBanks()-1){currentBank++;document.getElementById('bankSelect').value=currentBank;renderPads();}});
   const sd2=document.getElementById('switchDeck2');
