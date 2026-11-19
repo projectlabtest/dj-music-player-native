@@ -109,12 +109,6 @@
 <div class="app">
   <header>
     <h1>🎧 DJ BUTTON PLAYER</h1>
-    <div class="ctrl"><label>Master</label><input type="range" id="masterVol" min="0" max="1" step="0.01" value="0.8"></div>
-    <div class="ctrl"><label>Crossfader</label><input type="range" id="crossfader" min="-1" max="1" step="0.01" value="0"></div>
-    <div class="ctrl"><label>Bank</label><select id="bankSelect"></select></div>
-    <button id="prevBank">‹ Bank</button>
-    <button id="nextBank">Bank ›</button>
-
     <button id="loadFiles" class="primary">Load Files</button>
     <button id="loadFolder">Load Folder</button>
     <button id="autoFill">Auto-fill Bank</button>
@@ -152,12 +146,12 @@
     <div class="col">
       <div class="col-head">Pad Bank A → Deck A <span id="bankInfoA"></span></div>
       <div class="pad-toolbar">
-        <span style="font-size:11px;color:var(--muted)">24 buttons. Click = play sa Deck A. Drag track para i-assign (mirror sa B).</span>
+        <span style="font-size:11px;color:var(--muted)">32 buttons. Click = play sa Deck A. Drag track para i-assign (mirror sa B).</span>
       </div>
       <div class="pad-grid" id="padGridA"></div>
       <div class="col-head">Pad Bank B → Deck B <span id="bankInfoB"></span></div>
       <div class="pad-toolbar">
-        <span style="font-size:11px;color:var(--muted)">24 buttons. Click = play sa Deck B. Same assignment sa A.</span>
+        <span style="font-size:11px;color:var(--muted)">32 buttons. Click = play sa Deck B. Same assignment sa A.</span>
       </div>
       <div class="pad-grid" id="padGridB"></div>
     </div>
@@ -277,7 +271,7 @@ function ensureAudioCtx(){
   if(audioCtx) return;
   audioCtx=new (window.AudioContext||window.webkitAudioContext)();
   masterGain=audioCtx.createGain();
-  masterGain.gain.value=parseFloat(document.getElementById('masterVol').value);
+  masterGain.gain.value=0.8;
   masterGain.connect(audioCtx.destination);
   ['A','B'].forEach(d=>{
     const deck=decks[d];
@@ -315,7 +309,9 @@ function applyVol(d){
   deck.gain.gain.setTargetAtTime(v*cfGain, audioCtx.currentTime, 0.05);
 }
 function crossfadeGain(d){
-  const cf=parseFloat(document.getElementById('crossfader').value);
+  const el=document.getElementById('crossfader');
+  if(!el) return 1;
+  const cf=parseFloat(el.value);
   // A: cos((cf+1)*pi/4), B: sin(...)
   if(d==='A') return Math.cos((cf+1)*Math.PI/4);
   return Math.sin((cf+1)*Math.PI/4);
@@ -518,6 +514,7 @@ function totalBanks(){
 }
 function renderBankSelect(){
   const sel=document.getElementById('bankSelect');
+  if(!sel){ currentBank=0; return; }
   const cur=sel.value;
   sel.innerHTML='';
   for(let i=0;i<totalBanks();i++){
@@ -554,7 +551,7 @@ function renderPadGrid(gridId, deck, infoId){
     grid.appendChild(pad);
   }
   const info=document.getElementById(infoId);
-  if(info) info.textContent=`Bank ${currentBank+1} / ${totalBanks()}`;
+  if(info) info.textContent=`Bank ${currentBank+1}`;
 }
 function renderPads(){
   renderBankSelect();
@@ -716,7 +713,7 @@ function loadEventToPads(){
   }
   currentBank=0;
   const sel=document.getElementById('bankSelect');
-  if(sel.options.length) sel.value=0;
+  if(sel && sel.options.length) sel.value=0;
   renderPads();
   toast('Na-load ang program "'+ev.name+'" sa pads');
 }
@@ -922,7 +919,6 @@ async function init(){
   });
   document.getElementById('prevPage').addEventListener('click',()=>{if(currentPage>0){currentPage--;renderLibrary();}});
   document.getElementById('nextPage').addEventListener('click',()=>{const max=Math.ceil(filteredTracks.length/pageSize); if(currentPage<max-1){currentPage++;renderLibrary();}});
-  document.getElementById('bankSelect').addEventListener('change',e=>{currentBank=parseInt(e.target.value);renderPads();});
   document.getElementById('autoFill').addEventListener('click',autoFillBank);
   document.getElementById('fillAll').addEventListener('click',fillAllBanks);
 
@@ -930,8 +926,6 @@ async function init(){
 
 
   document.getElementById('newEvent').addEventListener('click',newEvent);
-  document.getElementById('prevBank').addEventListener('click',()=>{if(currentBank>0){currentBank--;document.getElementById('bankSelect').value=currentBank;renderPads();}});
-  document.getElementById('nextBank').addEventListener('click',()=>{if(currentBank<totalBanks()-1){currentBank++;document.getElementById('bankSelect').value=currentBank;renderPads();}});
   const sd2=document.getElementById('switchDeck2');
   if(sd2) sd2.addEventListener('click',switchDeck);
 
@@ -958,9 +952,6 @@ async function init(){
     document.getElementById('pitch'+d).addEventListener('input',()=>{if(audioCtx)applyPitch(d);});
     ['low','mid','high'].forEach(b=>document.getElementById(b+d).addEventListener('input',()=>{if(audioCtx)applyEQFor(d);}));
   });
-  // fix eq ids (lowA etc already)
-  document.getElementById('masterVol').addEventListener('input',e=>{if(masterGain) masterGain.gain.value=parseFloat(e.target.value);});
-  document.getElementById('crossfader').addEventListener('input',()=>{if(audioCtx)applyCrossfader();});
   // ensureAudioCtx on first interaction
   document.addEventListener('click',()=>{try{ensureAudioCtx();}catch(e){}}, {once:true});
   // drag from library already
