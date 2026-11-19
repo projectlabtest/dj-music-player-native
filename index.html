@@ -823,7 +823,7 @@ async function init(){
   document.getElementById('fillAll').addEventListener('click',fillAllBanks);
 
   document.getElementById('newEvent').addEventListener('click',newEvent);
-  document.getElementById('addToEvent').addEventListener('click',addToEvent);
+
   document.getElementById('prevBank').addEventListener('click',()=>{if(currentBank>0){currentBank--;document.getElementById('bankSelect').value=currentBank;renderPads();}});
   document.getElementById('nextBank').addEventListener('click',()=>{if(currentBank<totalBanks()-1){currentBank++;document.getElementById('bankSelect').value=currentBank;renderPads();}});
   const sd2=document.getElementById('switchDeck2');
