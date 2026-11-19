@@ -370,7 +370,7 @@ async function loadTrackToDeck(d, trackId){
   applyPitch(d);
   applyVol(d);
   applyEQFor(d);
-  toast('Loaded to Deck '+d+': '+track.name);
+  toast('Loaded sa Deck '+d+': '+track.name+' — pindutin ang Play');
 }
 
 function playDeck(d){
@@ -602,7 +602,11 @@ async function removePad(key,deck='A'){
 function onPadClick(key,deck){
   const trackId=pads[key];
   if(!trackId){ toast('Empty pad — drag a track onto it'); return; }
-  loadTrackToDeck(deck,trackId).then(()=>playDeck(deck));
+  // load lang — hindi agad mag-play; pindutin ang Play o Switch
+  loadTrackToDeck(deck,trackId);
+  targetDeck=deck;
+  const lbl=document.getElementById('activeDeckLabel');
+  if(lbl) lbl.textContent=deck;
   playingPadKey=key+'_'+deck;
   renderPads();
   setTimeout(()=>{playingPadKey=null;renderPads();},600);
@@ -978,7 +982,7 @@ async function init(){
   // drag from library already
   // keyboard
   window.addEventListener('keydown',e=>{
-    if(e.code==='Space'){e.preventDefault(); const d=document.getElementById('targetDeck').value; toggleDeck(d);}
+    if(e.code==='Space'){e.preventDefault(); toggleDeck(targetDeck);}
   });
   // drag & drop music files/folders anywhere
   async function readEntry(entry){
