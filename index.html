@@ -76,6 +76,8 @@
   .deck .track-name{font-size:12px;color:var(--text);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .deck .transport{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
   .deck .transport button{flex:1 1 auto;}
+  .deck .transport button.playbtn{font-weight:600;min-width:84px;}
+  .deck .transport button.playbtn.is-playing{background:var(--accent);border-color:var(--accent);color:#04121a;box-shadow:0 0 10px var(--accent);}
   .deck .sliders{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
   .wave{width:100%;height:60px;background:#000;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;}
   .vu{height:16px;background:#111;border-radius:4px;overflow:hidden;margin-bottom:6px;position:relative;}
@@ -163,8 +165,7 @@
           <span id="timeA">0:00 / 0:00</span>
         </div>
         <div class="transport">
-          <button id="playA">▶ Play</button>
-          <button id="pauseA">⏸ Pause</button>
+          <button id="playA" class="playbtn">▶ Play</button>
           <button id="stopA" class="danger">⏹ Stop</button>
           <button id="cueA">⏮ Cue</button>
           <button id="syncA">Sync</button>
@@ -193,8 +194,7 @@
           <span id="timeB">0:00 / 0:00</span>
         </div>
         <div class="transport">
-          <button id="playB">▶ Play</button>
-          <button id="pauseB">⏸ Pause</button>
+          <button id="playB" class="playbtn">▶ Play</button>
           <button id="stopB" class="danger">⏹ Stop</button>
           <button id="cueB">⏮ Cue</button>
           <button id="syncB">Sync</button>
@@ -344,7 +344,7 @@ function playDeck(d){
   // mutual exclusion: stop the other deck
   const other=d==='A'?'B':'A';
   pauseDeck(other);
-  decks[d].audio.play().then(()=>{decks[d].playing=true;}).catch(e=>toast('Play error: '+e.message));
+  decks[d].audio.play().then(()=>{decks[d].playing=true;syncPlayBtn(d);}).catch(e=>{toast('Play error: '+e.message);syncPlayBtn(d);});
 }
 function switchDeck(){
   const other=targetDeck==='A'?'B':'A';
@@ -354,7 +354,18 @@ function switchDeck(){
   if(decks[other].trackId){ playDeck(other); }
   else { toast('No track loaded on Deck '+other); }
 }
-function pauseDeck(d){ decks[d].audio.pause(); decks[d].playing=false; }
+function pauseDeck(d){ decks[d].audio.pause(); decks[d].playing=false; syncPlayBtn(d); }
+function syncPlayBtn(d){
+  const btn=document.getElementById('play'+d);
+  if(!btn) return;
+  const playing=!decks[d].audio.paused;
+  btn.textContent=playing?'⏸ Pause':'▶ Play';
+  btn.classList.toggle('is-playing',playing);
+}
+function toggleDeck(d){
+  if(!decks[d].trackId){ toast('Walang track sa Deck '+d); return; }
+  if(decks[d].audio.paused) playDeck(d); else pauseDeck(d);
+}
 function stopDeck(d){
   const a=decks[d].audio;
   a.pause();
@@ -362,6 +373,7 @@ function stopDeck(d){
   decks[d].playing=false;
   playingPadKey=null;
   renderPads();
+  syncPlayBtn(d);
   toast('Stopped Deck '+d);
 }
 function cueDeck(d){ const a=decks[d].audio; a.pause(); a.currentTime=0; decks[d].playing=false; }
@@ -844,9 +856,9 @@ async function init(){
   });
   // deck controls
   ['A','B'].forEach(d=>{
-    document.getElementById('play'+d).addEventListener('click',()=>playDeck(d));
-    document.getElementById('pause'+d).addEventListener('click',()=>pauseDeck(d));
+    document.getElementById('play'+d).addEventListener('click',()=>toggleDeck(d));
     document.getElementById('stop'+d).addEventListener('click',()=>stopDeck(d));
+    ['play','pause','ended'].forEach(ev=>decks[d].audio.addEventListener(ev,()=>syncPlayBtn(d)));
     document.getElementById('cue'+d).addEventListener('click',()=>cueDeck(d));
     const sk=document.getElementById('seek'+d);
     if(sk) sk.addEventListener('input',e=>{
@@ -865,7 +877,7 @@ async function init(){
   // drag from library already
   // keyboard
   window.addEventListener('keydown',e=>{
-    if(e.code==='Space'){e.preventDefault(); const d=document.getElementById('targetDeck').value; playDeck(d);}
+    if(e.code==='Space'){e.preventDefault(); const d=document.getElementById('targetDeck').value; toggleDeck(d);}
   });
   // drag & drop music files/folders anywhere
   async function readEntry(entry){
