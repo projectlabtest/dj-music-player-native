@@ -374,7 +374,7 @@ function renderLibrary(){
       const pid=document.getElementById('eventFilter').value;
       if(pid){
         const ev=events.find(e=>e.id===pid);
-        if(ev && !ev.trackIds.includes(t.id)){ ev.trackIds.push(t.id); dbPut('events',ev).then(()=>refreshEvents()); }
+        if(ev && !ev.trackIds.includes(t.id)){ ev.trackIds.push(t.id); dbPut('events',ev).then(()=>{refreshEvents(); applyFilter();}); }
       }
     });
     row.querySelector('.play').addEventListener('click',e=>{
