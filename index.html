@@ -41,6 +41,15 @@
   .lib-row .play{opacity:0;}
   .lib-row:hover .play{opacity:1;}
   .lib-footer{padding:8px 12px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;}
+  .program-list{flex:1;overflow:auto;padding:6px;display:flex;flex-direction:column;gap:6px;min-height:60px;}
+  .prog-card{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px;}
+  .prog-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;}
+  .prog-name{font-size:12px;font-weight:600;color:var(--accent);}
+  .prog-del{background:transparent;border:none;color:var(--muted);cursor:pointer;font-size:14px;}
+  .prog-del:hover{color:var(--accent2);}
+  .prog-tracks{font-size:11px;color:var(--muted);max-height:80px;overflow:auto;}
+  .prog-track{padding:2px 0;border-bottom:1px solid var(--border);}
+  .prog-card.dragover{border-color:var(--accent);background:var(--pad-active);}
   /* Pads */
   .pad-toolbar{display:flex;gap:6px;padding:8px 12px;border-bottom:1px solid var(--border);align-items:center;flex-wrap:wrap;}
   .pad-grid{flex:1;display:grid;grid-template-columns:repeat(8,1fr);grid-auto-rows:minmax(60px,1fr);gap:6px;padding:10px;overflow:auto;}
@@ -108,16 +117,16 @@
         <button id="prevPage">‹</button>
         <button id="nextPage">›</button>
       </div>
-      <div class="lib-tools" style="flex-wrap:wrap;">
-        <select id="eventFilter" style="flex:1;min-width:120px;"><option value="">All Tracks</option></select>
-        <button id="newEvent">+ Program</button>
-        <button id="addToEvent">Add Sel→Program</button>
+      <div class="lib-footer" style="border-top:none;">
+        <button id="newEvent" class="primary">+ Program</button>
       </div>
       <div class="lib-list" id="libList"></div>
       <div class="lib-footer">
         <span id="pageInfo">Page 1</span>
         <span>Drag to pad or click ▶</span>
       </div>
+      <div class="col-head">Programs</div>
+      <div class="program-list" id="programList"></div>
     </div>
     <!-- Pads -->
     <div class="col">
@@ -344,13 +353,7 @@ async function refreshTracks(){
 }
 function applyFilter(){
   const q=document.getElementById('libSearch').value.trim().toLowerCase();
-  const eid=document.getElementById('eventFilter').value;
-  let base=tracks;
-  if(eid){
-    const ev=events.find(e=>e.id===eid);
-    if(ev) base=tracks.filter(t=>ev.trackIds.includes(t.id));
-  }
-  filteredTracks = q? base.filter(t=>t.name.toLowerCase().includes(q)||(t.artist||'').toLowerCase().includes(q)) : base.slice();
+  filteredTracks = q? tracks.filter(t=>t.name.toLowerCase().includes(q)||(t.artist||'').toLowerCase().includes(q)) : tracks.slice();
   currentPage=0;
   renderLibrary();
 }
@@ -456,24 +459,103 @@ function onPadClick(key,deck){
 async function refreshEvents(){
   events=await dbAll('events');
   events.sort((a,b)=>a.name.localeCompare(b.name));
-  renderEventFilter();
+  renderPrograms();
 }
-function renderEventFilter(){
-  const sel=document.getElementById('eventFilter');
-  const cur=sel.value;
-  sel.innerHTML='<option value="">All Tracks</option>';
+function renderPrograms(){
+  const list=document.getElementById('programList');
+  if(!list) return;
+  list.innerHTML='';
   events.forEach(ev=>{
-    const o=document.createElement('option');
-    o.value=ev.id; o.textContent=ev.name+' ('+ev.trackIds.length+')';
-    sel.appendChild(o);
+    const card=document.createElement('div');
+    card.className='prog-card';
+    card.dataset.id=ev.id;
+    const head=document.createElement('div');
+    head.className='prog-head';
+    const name=document.createElement('span');
+    name.className='prog-name';
+    name.textContent=ev.name;
+    const del=document.createElement('button');
+    del.className='prog-del';
+    del.textContent='×';
+    del.addEventListener('click',e=>{e.stopPropagation(); delProgram(ev.id);});
+    head.appendChild(name);
+    head.appendChild(del);
+    card.appendChild(head);
+    const tracksDiv=document.createElement('div');
+    tracksDiv.className='prog-tracks';
+    ev.trackIds.forEach(tid=>{
+      const t=tracks.find(x=>x.id===tid);
+      if(t){
+        const row=document.createElement('div');
+        row.className='prog-track';
+        row.textContent=t.name;
+        row.draggable=true;
+        row.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',tid);});
+        tracksDiv.appendChild(row);
+      }
+    });
+    if(ev.trackIds.length===0){
+      const empty=document.createElement('div');
+      empty.className='prog-track';
+      empty.textContent='(walang tracks — i-drag dito)';
+      empty.style.fontStyle='italic';
+      tracksDiv.appendChild(empty);
+    }
+    card.appendChild(tracksDiv);
+    // drag & drop tracks onto card
+    card.addEventListener('dragover',e=>{e.preventDefault(); card.classList.add('dragover');});
+    card.addEventListener('dragleave',()=>card.classList.remove('dragover'));
+    card.addEventListener('drop',e=>{
+      e.preventDefault(); card.classList.remove('dragover');
+      const tid=e.dataTransfer.getData('text/plain');
+      if(tid){ addToProgram(ev.id,tid); }
+    });
+    // click card to load to pads? optional
+    card.addEventListener('click',e=>{
+      if(e.target.classList.contains('prog-del')) return;
+      loadProgramToPads(ev.id);
+    });
+    list.appendChild(card);
   });
-  if(events.some(e=>e.id===cur)) sel.value=cur;
+  if(events.length===0){
+    const empty=document.createElement('div');
+    empty.style.fontSize='11px'; empty.style.color='var(--muted)';
+    empty.textContent='Walang program pa. Click + Program.';
+    list.appendChild(empty);
+  }
 }
 function newEvent(){
   const name=prompt('Program name (hal. Wedding, Birthday):');
   if(!name) return;
   const id=(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2));
-  dbPut('events',{id,name,trackIds:[]}).then(()=>{refreshEvents(); const sel=document.getElementById('eventFilter'); if(sel){ sel.value=id; } applyFilter(); toast('Created program: '+name);});
+  dbPut('events',{id,name,trackIds:[]}).then(()=>{refreshEvents(); toast('Created program: '+name);});
+}
+function addToProgram(pid,tid){
+  const ev=events.find(e=>e.id===pid);
+  if(!ev) return;
+  if(!ev.trackIds.includes(tid)) ev.trackIds.push(tid);
+  dbPut('events',ev).then(()=>{refreshEvents(); toast('Nadagdag sa '+ev.name);});
+}
+function delProgram(id){
+  if(!confirm('Delete this program?')) return;
+  dbDel('events',id).then(()=>{refreshEvents(); toast('Program deleted');});
+}
+function loadProgramToPads(id){
+  const ev=events.find(e=>e.id===id);
+  if(!ev || !ev.trackIds.length){ toast('Walang tracks ang program'); return;}
+  Object.keys(pads).forEach(k=>{ delete pads[k]; dbDel('pads',k);});
+  const valid=ev.trackIds.filter(tid=>tracks.find(t=>t.id===tid));
+  let idx=0;
+  for(let bi=0;bi<200 && idx<valid.length;bi++){
+    for(let pi=0;pi<PADS_PER_BANK && idx<valid.length;pi++){
+      const key=padKey(bi,pi);
+      pads[key]=valid[idx++];
+      dbPut('pads',{key,trackId:pads[key]});
+    }
+  }
+  currentBank=0;
+  renderPads();
+  toast('Na-load ang program "'+ev.name+'" sa pads');
 }
 function delEvent(){
   const id=document.getElementById('eventFilter').value;
@@ -727,7 +809,7 @@ async function init(){
   document.getElementById('bankSelect').addEventListener('change',e=>{currentBank=parseInt(e.target.value);renderPads();});
   document.getElementById('autoFill').addEventListener('click',autoFillBank);
   document.getElementById('fillAll').addEventListener('click',fillAllBanks);
-  document.getElementById('eventFilter').addEventListener('change',applyFilter);
+
   document.getElementById('newEvent').addEventListener('click',newEvent);
   document.getElementById('addToEvent').addEventListener('click',addToEvent);
   document.getElementById('prevBank').addEventListener('click',()=>{if(currentBank>0){currentBank--;document.getElementById('bankSelect').value=currentBank;renderPads();}});
