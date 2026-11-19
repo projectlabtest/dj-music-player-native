@@ -46,6 +46,8 @@
   .lib-row .addp:hover{background:var(--accent);color:#04121a;}
   .lib-row .inprog{color:#3ddc97;font-size:12px;padding:0 4px;}
   #toggleAdd.on{background:var(--accent);color:#04121a;border-color:var(--accent);}
+  .lib-load{display:block;margin:10px auto 0;padding:8px 14px;font-size:12px;border-color:var(--accent);color:var(--accent);background:transparent;}
+  .lib-load:hover{background:var(--accent);color:#04121a;}
   .lib-footer{padding:8px 12px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;}
   .program-list{flex:1;overflow:auto;padding:6px;display:flex;flex-direction:column;gap:6px;min-height:60px;}
   .prog-card{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px;}
@@ -457,6 +459,13 @@ function renderLibrary(){
       empty.textContent='Walang track sa program na ito. I-click ang ➕ Add para magdagdag ng music.';
     }
     list.appendChild(empty);
+    if(!tracks.length){
+      const loadBtn=document.createElement('button');
+      loadBtn.className='lib-load';
+      loadBtn.textContent='📂 Load Music Files';
+      loadBtn.addEventListener('click',()=>document.getElementById('fileInput').click());
+      list.appendChild(loadBtn);
+    }
   }
   document.getElementById('libCount').textContent=filteredTracks.length;
   document.getElementById('pageInfo').textContent=`Page ${currentPage+1}/${Math.max(1,Math.ceil(filteredTracks.length/pageSize))}`;
