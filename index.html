@@ -61,13 +61,15 @@
   .pad .idx{position:absolute;top:4px;left:6px;font-size:10px;color:var(--muted);}
   .pad .label{font-size:11px;word-break:break-word;line-height:1.2;max-height:100%;overflow:hidden;}
   .pad.empty .label{color:var(--muted);font-style:italic;}
-  .pad .remove{position:absolute;top:2px;right:4px;font-size:12px;color:var(--muted);display:none;}
+  .pad .remove{position:absolute;top:0;right:0;font-size:13px;line-height:1;color:var(--muted);display:none;padding:2px 5px;border-radius:0 0 0 6px;cursor:pointer;}
+  .pad .remove:hover{color:#fff;background:var(--accent2);}
   .pad .decktag{position:absolute;bottom:2px;right:4px;font-size:9px;color:var(--muted);opacity:.7;}
   .pad.padA{border-top:2px solid var(--accent);}
   .pad.padB{border-top:2px solid var(--accent2);}
   .pad.effect{background:linear-gradient(135deg,#2a1f3d,#1f2430);border-color:var(--accent3);}
   .pad-grid{border-bottom:2px solid var(--border);}
   .pad:hover .remove{display:block;}
+  .pad.empty .remove{display:none !important;}
   /* Decks */
   .deck{padding:10px;border-bottom:1px solid var(--border);}
   .deck h3{margin:0 0 6px 0;font-size:13px;color:var(--accent);}
@@ -432,7 +434,10 @@ function renderPadGrid(gridId, deck, infoId){
     pad.className='pad '+(deck==='A'?'padA':'padB')+(track?'':' empty')+(playingPadKey===key+'_'+deck?' playing':'');
     pad.dataset.key=key;
     pad.innerHTML=`<span class="idx">${i+1}</span><span class="label">${track?escapeHtml(track.name):'empty'}</span><span class="remove">×</span><span class="decktag">${deck}</span>`;
-    pad.addEventListener('click',()=>onPadClick(key,deck));
+    pad.addEventListener('click',e=>{
+      if(e.target.classList.contains('remove')){ e.stopPropagation(); removePad(key); return; }
+      onPadClick(key,deck);
+    });
     pad.addEventListener('contextmenu',e=>{e.preventDefault();removePad(key);});
     pad.addEventListener('dragover',e=>e.preventDefault());
     pad.addEventListener('drop',e=>{
@@ -456,9 +461,11 @@ async function assignPad(key,trackId,deck='A'){
   renderPads();
 }
 async function removePad(key,deck='A'){
+  if(!pads[key]) return;
   delete pads[key];
   await dbDel('pads',key);
   renderPads();
+  toast('Naalis ang music sa button');
 }
 function onPadClick(key,deck){
   const trackId=pads[key];
