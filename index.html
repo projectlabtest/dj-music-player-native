@@ -504,9 +504,13 @@ async function deleteTrack(id){
   await dbDel('tracks',id);
   await dbDel('audio',id);
   audioCache.delete(id);
-  // remove pad assignments
+  // remove pad assignments (lahat ng program)
+  const allPadRows=await dbAll('pads');
+  for(const r of allPadRows){
+    if(r.trackId===id) await dbDel('pads',r.key);
+  }
   for(const key of Object.keys(pads)){
-    if(pads[key]===id){ delete pads[key]; await dbDel('pads',key); }
+    if(pads[key]===id) delete pads[key];
   }
   // remove from programs
   for(const ev of events){
@@ -534,6 +538,18 @@ async function deleteTrack(id){
 
 // ---------- Pads ----------
 function padKey(bank,index){return `${bank}_${index}`;}
+function padStoreKey(key){ return activeProgramId ? activeProgramId+'::'+key : null; }
+async function loadPadsForProgram(){
+  pads={};
+  if(activeProgramId){
+    const prefix=activeProgramId+'::';
+    const rows=await dbAll('pads');
+    rows.forEach(r=>{
+      if(r.key && r.key.startsWith(prefix)) pads[r.key.slice(prefix.length)]=r.trackId;
+    });
+  }
+  renderPads();
+}
 function allAssignedIds(){ return new Set(Object.values(pads)); }
 function isTrackAssigned(tid){ return allAssignedIds().has(tid); }
 function totalBanks(){
@@ -572,10 +588,13 @@ function renderPadGrid(gridId, deck, infoId){
     });
     pad.addEventListener('contextmenu',e=>{e.preventDefault();removePad(key);});
     pad.addEventListener('dragover',e=>e.preventDefault());
-    pad.addEventListener('drop',e=>{
+    pad.addEventListener('drop',async e=>{
       e.preventDefault();
       const tid=e.dataTransfer.getData('text/plain');
-      if(tid){ assignPad(key,tid); if(activeProgramId) addToProgram(activeProgramId,tid); }
+      if(!tid) return;
+      if(!activeProgramId){ toast('Pumili muna ng program bago mag-assign sa pad'); return; }
+      const ok=await assignPad(key,tid);
+      if(ok) addToProgram(activeProgramId,tid);
     });
     grid.appendChild(pad);
   }
@@ -587,15 +606,17 @@ function renderPads(){
   renderPadGrid('padGridA','A','bankInfoA');
   renderPadGrid('padGridB','B','bankInfoB');
 }
-async function assignPad(key,trackId,deck='A'){
+async function assignPad(key,trackId){
+  if(!activeProgramId){ toast('Pumili muna ng program bago mag-assign sa pad'); return false; }
   pads[key]=trackId;
-  await dbPut('pads',{key,trackId});
+  await dbPut('pads',{key: activeProgramId+'::'+key, programId: activeProgramId, trackId});
   renderPads();
+  return true;
 }
 async function removePad(key,deck='A'){
   if(!pads[key]) return;
   delete pads[key];
-  await dbDel('pads',key);
+  if(activeProgramId) await dbDel('pads', activeProgramId+'::'+key);
   renderPads();
   toast('Naalis ang music sa button');
 }
@@ -646,12 +667,13 @@ function renderPrograms(){
       if(tid){ addToProgram(ev.id,tid); }
     });
     // click card to set as active program (highlight)
-    card.addEventListener('click',e=>{
+    card.addEventListener('click',async e=>{
       if(e.target.classList.contains('prog-del')) return;
       activeProgramId = (activeProgramId===ev.id)? null : ev.id;
       setAddMode(false);
       renderPrograms();
       applyFilter();
+      await loadPadsForProgram();
       toast(activeProgramId? ('Active program: '+ev.name) : 'Pumili ng program para makita ang tracks');
     });
     list.appendChild(card);
@@ -697,7 +719,13 @@ async function newEvent(){
   const name=await askText('Program name','hal. Wedding, Birthday');
   if(!name) return;
   const id=(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2));
-  dbPut('events',{id,name,trackIds:[]}).then(()=>{activeProgramId=id; refreshEvents(); applyFilter(); toast('Created program: '+name);});
+  await dbPut('events',{id,name,trackIds:[]});
+  activeProgramId=id;
+  pads={};
+  renderPads();
+  await refreshEvents();
+  applyFilter();
+  toast('Created program: '+name);
 }
 function addToProgram(pid,tid){
   const ev=events.find(e=>e.id===pid);
@@ -705,29 +733,20 @@ function addToProgram(pid,tid){
   if(!ev.trackIds.includes(tid)) ev.trackIds.push(tid);
   dbPut('events',ev).then(()=>{refreshEvents(); applyFilter(); toast('Nadagdag sa '+ev.name);});
 }
-function delProgram(id){
+async function delProgram(id){
   if(!confirm('Delete this program?')) return;
-  if(activeProgramId===id) activeProgramId=null;
-  dbDel('events',id).then(()=>{refreshEvents(); applyFilter(); toast('Program deleted');});
-}
-function loadProgramToPads(id){
-  const ev=events.find(e=>e.id===id);
-  if(!ev || !ev.trackIds.length){ toast('Walang tracks ang program'); return;}
-  Object.keys(pads).forEach(k=>{ delete pads[k]; dbDel('pads',k);});
-  const valid=ev.trackIds.filter(tid=>tracks.find(t=>t.id===tid));
-  let idx=0;
-  for(let bi=0;bi<200 && idx<valid.length;bi++){
-    for(let pi=0;pi<PADS_PER_BANK && idx<valid.length;pi++){
-      const key=padKey(bi,pi);
-      pads[key]=valid[idx++];
-      dbPut('pads',{key,trackId:pads[key]});
-    }
-  }
-  currentBank=0;
+  if(activeProgramId===id){ activeProgramId=null; pads={}; }
+  await dbDel('events',id);
+  const prefix=id+'::';
+  const rows=await dbAll('pads');
+  for(const r of rows){ if(r.key && r.key.startsWith(prefix)) await dbDel('pads',r.key); }
+  await refreshEvents();
+  applyFilter();
   renderPads();
-  toast('Na-load ang program "'+ev.name+'" sa pads');
+  toast('Program deleted');
 }
 function fillAllBanks(){
+  if(!activeProgramId){ toast('Pumili muna ng program'); return; }
   const assigned=new Set(Object.values(pads));
   const candidates=tracks.filter(t=>!assigned.has(t.id));
   let guard=0;
@@ -739,7 +758,7 @@ function fillAllBanks(){
         const key=padKey(bi,pi);
         if(!pads[key]){
           pads[key]=candidates.shift().id;
-          dbPut('pads',{key,trackId:pads[key]});
+          dbPut('pads',{key: activeProgramId+'::'+key, programId: activeProgramId, trackId:pads[key]});
           placed=true;
         }
       }
@@ -750,6 +769,7 @@ function fillAllBanks(){
   toast('Filled all banks');
 }
 function autoFillBank(){
+  if(!activeProgramId){ toast('Pumili muna ng program'); return; }
   const assigned=new Set(Object.values(pads));
   const candidates=tracks.filter(t=>!assigned.has(t.id));
   let idx=0;
@@ -757,7 +777,7 @@ function autoFillBank(){
     const key=padKey(currentBank,i);
     if(!pads[key]){
       pads[key]=candidates[idx].id;
-      dbPut('pads',{key,trackId:candidates[idx].id});
+      dbPut('pads',{key: activeProgramId+'::'+key, programId: activeProgramId, trackId:pads[key]});
       idx++;
     }
   }
@@ -906,10 +926,8 @@ function setStatus(s){ document.getElementById('status').textContent=s; }
 // ---------- Init ----------
 async function init(){
   await openDB();
-  // load pads
-  const padRows=await dbAll('pads');
+  // load pads (walang program pa sa simula → empty)
   pads={};
-  padRows.forEach(r=>{pads[r.key]=r.trackId;});
   // settings
   await refreshTracks();
   await refreshEvents();
@@ -958,6 +976,7 @@ async function init(){
     if(!confirm('Clear entire library?')) return;
     await dbClear('tracks'); await dbClear('audio'); await dbClear('pads'); await dbClear('events');
     pads={}; tracks=[]; filteredTracks=[]; events=[]; selectedTrackIds.clear();
+    activeProgramId=null; setAddMode(false);
     renderPrograms();
     renderLibrary(); renderPads();
     toast('Library cleared');
