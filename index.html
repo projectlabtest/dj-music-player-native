@@ -103,17 +103,28 @@
   ::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px;}
   .hidden{display:none;}
   .toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:var(--panel2);border:1px solid var(--accent);color:var(--text);padding:8px 14px;border-radius:8px;font-size:12px;z-index:9999;}
+  .gear-wrap{position:relative;margin-left:auto;}
+  #gearBtn{font-size:16px;padding:4px 10px;line-height:1;}
+  #gearBtn.active{background:var(--accent);color:#04121a;border-color:var(--accent);}
+  .gear-menu{display:none;position:absolute;right:0;top:calc(100% + 6px);background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:6px;flex-direction:column;gap:6px;min-width:170px;z-index:1000;box-shadow:0 10px 28px #000a;}
+  .gear-menu.open{display:flex;}
+  .gear-menu button{text-align:left;width:100%;}
 </style>
 </head>
 <body>
 <div class="app">
   <header>
     <h1>🎧 DJ BUTTON PLAYER</h1>
-    <button id="loadFiles" class="primary">Load Files</button>
-    <button id="loadFolder">Load Folder</button>
-    <button id="autoFill">Auto-fill Bank</button>
-    <button id="fillAll">Fill All Banks</button>
-    <button id="clearLib" class="danger">Clear Library</button>
+    <div class="gear-wrap">
+      <button id="gearBtn" title="Settings">⚙</button>
+      <div class="gear-menu" id="gearMenu">
+        <button id="loadFiles" class="primary">Load Files</button>
+        <button id="loadFolder">Load Folder</button>
+        <button id="autoFill">Auto-fill Bank</button>
+        <button id="fillAll">Fill All Banks</button>
+        <button id="clearLib" class="danger">Clear Library</button>
+      </div>
+    </div>
     <input type="file" id="fileInput" multiple accept="audio/*" hidden>
     <input type="file" id="folderInput" webkitdirectory directory multiple hidden>
   </header>
@@ -906,6 +917,21 @@ async function init(){
   renderBankSelect();
   renderPads();
   // events
+  const gearBtn=document.getElementById('gearBtn');
+  const gearMenu=document.getElementById('gearMenu');
+  gearBtn.addEventListener('click',e=>{
+    e.stopPropagation();
+    const open=gearMenu.classList.toggle('open');
+    gearBtn.classList.toggle('active',open);
+  });
+  document.addEventListener('click',e=>{
+    if(!gearMenu.classList.contains('open')) return;
+    if(gearMenu.contains(e.target)) return;
+    gearMenu.classList.remove('open'); gearBtn.classList.remove('active');
+  });
+  gearMenu.addEventListener('click',()=>{
+    gearMenu.classList.remove('open'); gearBtn.classList.remove('active');
+  });
   document.getElementById('loadFiles').addEventListener('click',()=>document.getElementById('fileInput').click());
   document.getElementById('fileInput').addEventListener('change',e=>{addFiles(e.target.files);e.target.value='';});
   document.getElementById('loadFolder').addEventListener('click',()=>document.getElementById('folderInput').click());
