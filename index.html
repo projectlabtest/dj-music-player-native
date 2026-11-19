@@ -90,8 +90,7 @@
     <div class="ctrl"><label>Bank</label><select id="bankSelect"></select></div>
     <button id="prevBank">‹ Bank</button>
     <button id="nextBank">Bank ›</button>
-    <div class="ctrl"><label>Target Deck</label><select id="targetDeck"><option>A</option><option>B</option></select></div>
-    <button id="switchDeck">⇄ Switch</button>
+
     <button id="loadFiles" class="primary">Load Files</button>
     <button id="loadFolder">Load Folder</button>
     <button id="autoFill">Auto-fill Bank</button>
@@ -238,6 +237,7 @@ let filteredTracks=[];
 let events=[];
 let selectedTrackIds=new Set();
 let playingPadKey=null;
+let targetDeck='A';
 let audioCtx=null;
 let masterGain=null;
 const decks={
@@ -329,9 +329,8 @@ function playDeck(d){
   decks[d].audio.play().then(()=>{decks[d].playing=true;}).catch(e=>toast('Play error: '+e.message));
 }
 function switchDeck(){
-  const cur=document.getElementById('targetDeck').value;
-  const other=cur==='A'?'B':'A';
-  document.getElementById('targetDeck').value=other;
+  const other=targetDeck==='A'?'B':'A';
+  targetDeck=other;
   const lbl=document.getElementById('activeDeckLabel');
   if(lbl) lbl.textContent=other;
   if(decks[other].trackId){ playDeck(other); }
@@ -378,7 +377,7 @@ function renderLibrary(){
     });
     row.querySelector('.play').addEventListener('click',e=>{
       e.stopPropagation();
-      const deck=document.getElementById('targetDeck').value;
+      const deck=targetDeck;
       loadTrackToDeck(deck,t.id).then(()=>playDeck(deck));
     });
     list.appendChild(row);
@@ -731,11 +730,9 @@ async function init(){
   document.getElementById('delEvent').addEventListener('click',delEvent);
   document.getElementById('prevBank').addEventListener('click',()=>{if(currentBank>0){currentBank--;document.getElementById('bankSelect').value=currentBank;renderPads();}});
   document.getElementById('nextBank').addEventListener('click',()=>{if(currentBank<totalBanks()-1){currentBank++;document.getElementById('bankSelect').value=currentBank;renderPads();}});
-  document.getElementById('switchDeck').addEventListener('click',switchDeck);
   const sd2=document.getElementById('switchDeck2');
   if(sd2) sd2.addEventListener('click',switchDeck);
-  const td=document.getElementById('targetDeck');
-  if(td) td.addEventListener('change',e=>{const l=document.getElementById('activeDeckLabel');if(l)l.textContent=e.target.value;});
+
   document.getElementById('clearLib').addEventListener('click',async()=>{
     if(!confirm('Clear entire library?')) return;
     await dbClear('tracks'); await dbClear('audio'); await dbClear('pads'); await dbClear('events');
