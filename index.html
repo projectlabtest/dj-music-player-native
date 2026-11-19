@@ -114,6 +114,9 @@
     <!-- Programs Sidebar -->
     <div class="col">
       <div class="col-head">Programs</div>
+      <div class="lib-footer" style="border-top:none;">
+        <button id="newEvent" class="primary">+ Program</button>
+      </div>
       <div class="program-list" id="programList"></div>
     </div>
     <!-- Library -->
@@ -821,6 +824,7 @@ async function init(){
 
 
 
+  document.getElementById('newEvent').addEventListener('click',newEvent);
   document.getElementById('prevBank').addEventListener('click',()=>{if(currentBank>0){currentBank--;document.getElementById('bankSelect').value=currentBank;renderPads();}});
   document.getElementById('nextBank').addEventListener('click',()=>{if(currentBank<totalBanks()-1){currentBank++;document.getElementById('bankSelect').value=currentBank;renderPads();}});
   const sd2=document.getElementById('switchDeck2');
