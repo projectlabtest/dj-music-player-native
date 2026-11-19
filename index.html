@@ -493,27 +493,7 @@ function renderPrograms(){
     head.appendChild(name);
     head.appendChild(del);
     card.appendChild(head);
-    const tracksDiv=document.createElement('div');
-    tracksDiv.className='prog-tracks';
-    ev.trackIds.forEach(tid=>{
-      const t=tracks.find(x=>x.id===tid);
-      if(t){
-        const row=document.createElement('div');
-        row.className='prog-track';
-        row.textContent=t.name;
-        row.draggable=true;
-        row.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',tid);});
-        tracksDiv.appendChild(row);
-      }
-    });
-    if(ev.trackIds.length===0){
-      const empty=document.createElement('div');
-      empty.className='prog-track';
-      empty.textContent='(walang tracks — i-drag dito)';
-      empty.style.fontStyle='italic';
-      tracksDiv.appendChild(empty);
-    }
-    card.appendChild(tracksDiv);
+
     // drag & drop tracks onto card
     card.addEventListener('dragover',e=>{e.preventDefault(); card.classList.add('dragover');});
     card.addEventListener('dragleave',()=>card.classList.remove('dragover'));
