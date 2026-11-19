@@ -41,6 +41,11 @@
   .lib-row .del{opacity:0;padding:2px 7px;line-height:1;color:var(--muted);}
   .lib-row:hover .del{opacity:1;}
   .lib-row .del:hover{color:#fff;background:var(--accent2);border-color:var(--accent2);}
+  .lib-empty{padding:16px 12px;font-size:11px;color:var(--muted);line-height:1.5;text-align:center;font-style:italic;}
+  .lib-row .addp{padding:2px 7px;line-height:1;color:var(--accent);border-color:var(--accent);}
+  .lib-row .addp:hover{background:var(--accent);color:#04121a;}
+  .lib-row .inprog{color:#3ddc97;font-size:12px;padding:0 4px;}
+  #toggleAdd.on{background:var(--accent);color:#04121a;border-color:var(--accent);}
   .lib-footer{padding:8px 12px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;}
   .program-list{flex:1;overflow:auto;padding:6px;display:flex;flex-direction:column;gap:6px;min-height:60px;}
   .prog-card{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px;}
@@ -130,6 +135,7 @@
       <div class="col-head">Library <span id="libCount">0</span></div>
       <div class="lib-tools">
         <input class="lib-search" id="libSearch" placeholder="Search tracks...">
+        <button id="toggleAdd" title="Magdagdag ng tracks sa program">➕ Add</button>
         <button id="prevPage">‹</button>
         <button id="nextPage">›</button>
       </div>
@@ -257,6 +263,7 @@ let selectedTrackIds=new Set();
 let playingPadKey=null;
 let targetDeck='A';
 let activeProgramId=null;
+let addMode=false;
 let audioCtx=null;
 let masterGain=null;
 const decks={
@@ -385,12 +392,17 @@ async function refreshTracks(){
   tracks.sort((a,b)=>a.name.localeCompare(b.name));
   applyFilter();
 }
+function setAddMode(v){
+  addMode=v;
+  const b=document.getElementById('toggleAdd');
+  if(b){ b.classList.toggle('on',addMode); b.textContent=addMode?'✓ Done':'➕ Add'; }
+}
 function applyFilter(){
   const q=document.getElementById('libSearch').value.trim().toLowerCase();
-  let base=tracks;
+  let base=[];
   if(activeProgramId){
     const ev=events.find(e=>e.id===activeProgramId);
-    if(ev) base=tracks.filter(t=>ev.trackIds.includes(t.id));
+    if(ev) base = addMode ? tracks.slice() : tracks.filter(t=>ev.trackIds.includes(t.id));
   }
   filteredTracks = q? base.filter(t=>t.name.toLowerCase().includes(q)||(t.artist||'').toLowerCase().includes(q)) : base.slice();
   currentPage=0;
@@ -401,16 +413,23 @@ function renderLibrary(){
   list.innerHTML='';
   const start=currentPage*pageSize;
   const page=filteredTracks.slice(start,start+pageSize);
+  const prog = activeProgramId ? events.find(e=>e.id===activeProgramId) : null;
   page.forEach(t=>{
     const row=document.createElement('div');
     row.className='lib-row'+(selectedTrackIds.has(t.id)?' selected':'');
     row.draggable=true;
     row.dataset.id=t.id;
     const dur=isFinite(t.duration)? t.duration.toFixed(1)+'s':'--';
-    row.innerHTML=`<span class="name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span><span class="dur">${dur}</span><button class="del" title="Delete from library">×</button>`;
+    let addBtn='';
+    if(addMode && prog){
+      addBtn = prog.trackIds.includes(t.id)
+        ? '<span class="inprog" title="Nasa program na">✓</span>'
+        : '<button class="addp" title="Add sa program">+</button>';
+    }
+    row.innerHTML=`<span class="name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span><span class="dur">${dur}</span>${addBtn}<button class="del" title="Delete from library">×</button>`;
     row.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',t.id);});
     row.addEventListener('click',e=>{
-      if(e.target.classList.contains('del')) return;
+      if(e.target.classList.contains('del')||e.target.classList.contains('addp')) return;
       if(selectedTrackIds.has(t.id)) selectedTrackIds.delete(t.id); else selectedTrackIds.add(t.id);
       row.classList.toggle('selected');
     });
@@ -418,9 +437,28 @@ function renderLibrary(){
       e.stopPropagation();
       deleteTrack(t.id);
     });
+    const ab=row.querySelector('.addp');
+    if(ab) ab.addEventListener('click',e=>{
+      e.stopPropagation();
+      if(activeProgramId) addToProgram(activeProgramId,t.id);
+    });
     list.appendChild(row);
   });
-  document.getElementById('libCount').textContent=tracks.length;
+  if(page.length===0){
+    const empty=document.createElement('div');
+    empty.className='lib-empty';
+    if(!activeProgramId){
+      empty.textContent='Pumili ng program sa kaliwang sidebar para makita ang mga track.';
+    } else if(addMode && !tracks.length){
+      empty.textContent='Walang music sa library. I-load muna ang mga music file.';
+    } else if(addMode){
+      empty.textContent='Walang track na tumugma sa search.';
+    } else {
+      empty.textContent='Walang track sa program na ito. I-click ang ➕ Add para magdagdag ng music.';
+    }
+    list.appendChild(empty);
+  }
+  document.getElementById('libCount').textContent=filteredTracks.length;
   document.getElementById('pageInfo').textContent=`Page ${currentPage+1}/${Math.max(1,Math.ceil(filteredTracks.length/pageSize))}`;
 }
 function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
@@ -572,9 +610,10 @@ function renderPrograms(){
     card.addEventListener('click',e=>{
       if(e.target.classList.contains('prog-del')) return;
       activeProgramId = (activeProgramId===ev.id)? null : ev.id;
+      setAddMode(false);
       renderPrograms();
       applyFilter();
-      toast(activeProgramId? ('Active program: '+ev.name) : 'All tracks');
+      toast(activeProgramId? ('Active program: '+ev.name) : 'Pumili ng program para makita ang tracks');
     });
     list.appendChild(card);
   });
@@ -866,6 +905,12 @@ async function init(){
   document.getElementById('loadFolder').addEventListener('click',()=>document.getElementById('folderInput').click());
   document.getElementById('folderInput').addEventListener('change',e=>{addFiles(e.target.files);e.target.value='';});
   document.getElementById('libSearch').addEventListener('input',applyFilter);
+  document.getElementById('toggleAdd').addEventListener('click',()=>{
+    if(!activeProgramId){ toast('Pumili muna ng program sa kaliwa'); return; }
+    setAddMode(!addMode);
+    applyFilter();
+    toast(addMode ? 'Add mode: piliin ang music na idadagdag sa program' : 'Tapos na ang pag-add');
+  });
   document.getElementById('prevPage').addEventListener('click',()=>{if(currentPage>0){currentPage--;renderLibrary();}});
   document.getElementById('nextPage').addEventListener('click',()=>{const max=Math.ceil(filteredTracks.length/pageSize); if(currentPage<max-1){currentPage++;renderLibrary();}});
   document.getElementById('bankSelect').addEventListener('change',e=>{currentBank=parseInt(e.target.value);renderPads();});
