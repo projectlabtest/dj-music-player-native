@@ -109,6 +109,13 @@
   .gear-menu{display:none;position:absolute;right:0;top:calc(100% + 6px);background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:6px;flex-direction:column;gap:6px;min-width:170px;z-index:1000;box-shadow:0 10px 28px #000a;}
   .gear-menu.open{display:flex;}
   .gear-menu button{text-align:left;width:100%;}
+  .modal-backdrop{position:fixed;inset:0;background:#000a;display:none;align-items:center;justify-content:center;z-index:10000;}
+  .modal-backdrop.open{display:flex;}
+  .modal{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:16px;min-width:320px;max-width:90vw;box-shadow:0 20px 50px #000c;}
+  .modal-title{font-size:13px;font-weight:600;margin-bottom:10px;color:var(--accent);}
+  .modal input{width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:8px 10px;font-size:13px;margin-bottom:12px;outline:none;}
+  .modal input:focus{border-color:var(--accent);}
+  .modal-actions{display:flex;justify-content:flex-end;gap:8px;}
 </style>
 </head>
 <body>
@@ -227,6 +234,17 @@
         <div class="ctrl"><label>Now Playing</label><span id="nowPlaying" style="font-size:12px">—</span></div>
       </div>
       <div class="status" id="status">Ready.</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal">
+    <div class="modal-title" id="modalTitle">Program name</div>
+    <input type="text" id="modalInput" placeholder="">
+    <div class="modal-actions">
+      <button id="modalCancel">Cancel</button>
+      <button id="modalOk" class="primary">OK</button>
     </div>
   </div>
 </div>
@@ -641,8 +659,38 @@ function renderPrograms(){
     list.appendChild(empty);
   }
 }
-function newEvent(){
-  const name=prompt('Program name (hal. Wedding, Birthday):');
+function askText(title, placeholder='', defaultValue=''){
+  return new Promise(resolve=>{
+    const back=document.getElementById('modalBackdrop');
+    const t=document.getElementById('modalTitle');
+    const inp=document.getElementById('modalInput');
+    const ok=document.getElementById('modalOk');
+    const cancel=document.getElementById('modalCancel');
+    t.textContent=title;
+    inp.placeholder=placeholder||'';
+    inp.value=defaultValue||'';
+    back.classList.add('open');
+    setTimeout(()=>{inp.focus();inp.select();},30);
+    const done=val=>{
+      back.classList.remove('open');
+      ok.removeEventListener('click',onOk);
+      cancel.removeEventListener('click',onCancel);
+      inp.removeEventListener('keydown',onKey);
+      back.removeEventListener('mousedown',onBack);
+      resolve(val);
+    };
+    const onOk=()=>{ const v=inp.value.trim(); if(!v){ inp.focus(); return; } done(v); };
+    const onCancel=()=>done(null);
+    const onKey=e=>{ if(e.key==='Enter'){e.preventDefault();onOk();} else if(e.key==='Escape'){e.preventDefault();onCancel();} };
+    const onBack=e=>{ if(e.target===back) onCancel(); };
+    ok.addEventListener('click',onOk);
+    cancel.addEventListener('click',onCancel);
+    inp.addEventListener('keydown',onKey);
+    back.addEventListener('mousedown',onBack);
+  });
+}
+async function newEvent(){
+  const name=await askText('Program name','hal. Wedding, Birthday');
   if(!name) return;
   const id=(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2));
   dbPut('events',{id,name,trackIds:[]}).then(()=>{activeProgramId=id; refreshEvents(); applyFilter(); toast('Created program: '+name);});
@@ -672,59 +720,6 @@ function loadProgramToPads(id){
     }
   }
   currentBank=0;
-  renderPads();
-  toast('Na-load ang program "'+ev.name+'" sa pads');
-}
-function delEvent(){
-  const id=document.getElementById('eventFilter').value;
-  if(!id){ toast('Pumili muna ng program'); return;}
-  if(!confirm('Delete this program?')) return;
-  dbDel('events',id).then(()=>{refreshEvents(); document.getElementById('eventFilter').value=''; applyFilter(); toast('Program deleted');});
-}
-function addToEvent(){
-  if(selectedTrackIds.size===0){ toast('Pumili muna ng tracks (click sa library)'); return;}
-  if(events.length===0){ toast('Gumawa muna ng program (+ Program)'); return;}
-  let ev=null;
-  if(events.length===1){ ev=events[0]; }
-  else {
-    const list=events.map((e,i)=>(i+1)+'. '+e.name).join('\\n');
-    const ans=prompt('Pumili ng program (type number o pangalan):\\n'+list);
-    if(!ans) return;
-    const n=parseInt(ans);
-    if(!isNaN(n) && n>=1 && n<=events.length) ev=events[n-1];
-    else ev=events.find(e=>e.name.toLowerCase()===ans.toLowerCase());
-  }
-  if(!ev){ toast('Hindi makita ang program'); return; }
-  selectedTrackIds.forEach(tid=>{ if(!ev.trackIds.includes(tid)) ev.trackIds.push(tid);});
-  dbPut('events',ev).then(()=>{refreshEvents(); toast('Nadagdag sa '+ev.name+': '+selectedTrackIds.size); selectedTrackIds.clear(); renderLibrary();});
-}
-function saveBankAsEvent(){
-  const name=prompt('Program name para sa current bank:');
-  if(!name) return;
-  const ids=[];
-  for(let i=0;i<32;i++){ const tid=pads[padKey(currentBank,i)]; if(tid) ids.push(tid);}
-  if(!ids.length){ toast('Walang laman ang bank'); return;}
-  const id=(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2));
-  dbPut('events',{id,name,trackIds:ids}).then(()=>{refreshEvents(); toast('Na-save ang program: '+name);});
-}
-function loadEventToPads(){
-  const id=document.getElementById('eventFilter').value;
-  if(!id){ toast('Pumili muna ng program'); return;}
-  const ev=events.find(e=>e.id===id);
-  if(!ev || !ev.trackIds.length){ toast('Walang tracks ang program'); return;}
-  Object.keys(pads).forEach(k=>{ delete pads[k]; dbDel('pads',k);});
-  const valid=ev.trackIds.filter(tid=>tracks.find(t=>t.id===tid));
-  let idx=0;
-  for(let bi=0;bi<200 && idx<valid.length;bi++){
-    for(let pi=0;pi<PADS_PER_BANK && idx<valid.length;pi++){
-      const key=padKey(bi,pi);
-      pads[key]=valid[idx++];
-      dbPut('pads',{key,trackId:pads[key]});
-    }
-  }
-  currentBank=0;
-  const sel=document.getElementById('bankSelect');
-  if(sel && sel.options.length) sel.value=0;
   renderPads();
   toast('Na-load ang program "'+ev.name+'" sa pads');
 }
