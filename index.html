@@ -38,8 +38,6 @@
   .lib-row.selected{background:var(--pad-active);border-left:2px solid var(--accent);}
   .lib-row .name{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .lib-row .dur{color:var(--muted);font-size:11px;}
-  .lib-row .play{opacity:0;}
-  .lib-row:hover .play{opacity:1;}
   .lib-row .del{opacity:0;padding:2px 7px;line-height:1;color:var(--muted);}
   .lib-row:hover .del{opacity:1;}
   .lib-row .del:hover{color:#fff;background:var(--accent2);border-color:var(--accent2);}
@@ -409,17 +407,12 @@ function renderLibrary(){
     row.draggable=true;
     row.dataset.id=t.id;
     const dur=isFinite(t.duration)? t.duration.toFixed(1)+'s':'--';
-    row.innerHTML=`<span class="name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span><span class="dur">${dur}</span><button class="play">▶</button><button class="del" title="Delete from library">×</button>`;
+    row.innerHTML=`<span class="name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span><span class="dur">${dur}</span><button class="del" title="Delete from library">×</button>`;
     row.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',t.id);});
     row.addEventListener('click',e=>{
-      if(e.target.classList.contains('play')) return;
+      if(e.target.classList.contains('del')) return;
       if(selectedTrackIds.has(t.id)) selectedTrackIds.delete(t.id); else selectedTrackIds.add(t.id);
       row.classList.toggle('selected');
-    });
-    row.querySelector('.play').addEventListener('click',e=>{
-      e.stopPropagation();
-      const deck=targetDeck;
-      loadTrackToDeck(deck,t.id).then(()=>playDeck(deck));
     });
     row.querySelector('.del').addEventListener('click',e=>{
       e.stopPropagation();
