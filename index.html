@@ -74,7 +74,8 @@
   .deck{padding:10px;border-bottom:1px solid var(--border);}
   .deck h3{margin:0 0 6px 0;font-size:13px;color:var(--accent);}
   .deck .track-name{font-size:12px;color:var(--text);margin-bottom:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .deck .transport{display:flex;gap:6px;margin-bottom:6px;}
+  .deck .transport{display:flex;gap:6px;margin-bottom:6px;flex-wrap:wrap;}
+  .deck .transport button{flex:1 1 auto;}
   .deck .sliders{display:grid;grid-template-columns:1fr 1fr;gap:6px;}
   .wave{width:100%;height:60px;background:#000;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;}
   .vu{height:16px;background:#111;border-radius:4px;overflow:hidden;margin-bottom:6px;position:relative;}
@@ -164,6 +165,7 @@
         <div class="transport">
           <button id="playA">▶ Play</button>
           <button id="pauseA">⏸ Pause</button>
+          <button id="stopA" class="danger">⏹ Stop</button>
           <button id="cueA">⏮ Cue</button>
           <button id="syncA">Sync</button>
         </div>
@@ -193,6 +195,7 @@
         <div class="transport">
           <button id="playB">▶ Play</button>
           <button id="pauseB">⏸ Pause</button>
+          <button id="stopB" class="danger">⏹ Stop</button>
           <button id="cueB">⏮ Cue</button>
           <button id="syncB">Sync</button>
         </div>
@@ -352,6 +355,15 @@ function switchDeck(){
   else { toast('No track loaded on Deck '+other); }
 }
 function pauseDeck(d){ decks[d].audio.pause(); decks[d].playing=false; }
+function stopDeck(d){
+  const a=decks[d].audio;
+  a.pause();
+  a.currentTime=0;
+  decks[d].playing=false;
+  playingPadKey=null;
+  renderPads();
+  toast('Stopped Deck '+d);
+}
 function cueDeck(d){ const a=decks[d].audio; a.pause(); a.currentTime=0; decks[d].playing=false; }
 
 // ---------- Library ----------
@@ -826,7 +838,7 @@ async function init(){
     if(!confirm('Clear entire library?')) return;
     await dbClear('tracks'); await dbClear('audio'); await dbClear('pads'); await dbClear('events');
     pads={}; tracks=[]; filteredTracks=[]; events=[]; selectedTrackIds.clear();
-    renderEventFilter();
+    renderPrograms();
     renderLibrary(); renderPads();
     toast('Library cleared');
   });
@@ -834,6 +846,7 @@ async function init(){
   ['A','B'].forEach(d=>{
     document.getElementById('play'+d).addEventListener('click',()=>playDeck(d));
     document.getElementById('pause'+d).addEventListener('click',()=>pauseDeck(d));
+    document.getElementById('stop'+d).addEventListener('click',()=>stopDeck(d));
     document.getElementById('cue'+d).addEventListener('click',()=>cueDeck(d));
     const sk=document.getElementById('seek'+d);
     if(sk) sk.addEventListener('input',e=>{
