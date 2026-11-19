@@ -1,0 +1,27 @@
+{
+  "name": "dj-music-player",
+  "version": "1.0.0",
+  "description": "DJ Music Player native app",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder --win"
+  },
+  "build": {
+    "appId": "com.lhc.djmusicplayer",
+    "productName": "DJ Music Player",
+    "files": [
+      "index.html",
+      "main.js",
+      "preload.js"
+    ],
+    "win": {
+      "target": "nsis"
+    }
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0",
+    "electron-packager": "^17.1.2"
+  }
+}
