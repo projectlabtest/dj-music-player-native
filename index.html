@@ -360,7 +360,12 @@ async function refreshTracks(){
 }
 function applyFilter(){
   const q=document.getElementById('libSearch').value.trim().toLowerCase();
-  filteredTracks = q? tracks.filter(t=>t.name.toLowerCase().includes(q)||(t.artist||'').toLowerCase().includes(q)) : tracks.slice();
+  let base=tracks;
+  if(activeProgramId){
+    const ev=events.find(e=>e.id===activeProgramId);
+    if(ev) base=tracks.filter(t=>ev.trackIds.includes(t.id));
+  }
+  filteredTracks = q? base.filter(t=>t.name.toLowerCase().includes(q)||(t.artist||'').toLowerCase().includes(q)) : base.slice();
   currentPage=0;
   renderLibrary();
 }
@@ -522,7 +527,8 @@ function renderPrograms(){
       if(e.target.classList.contains('prog-del')) return;
       activeProgramId = (activeProgramId===ev.id)? null : ev.id;
       renderPrograms();
-      toast(activeProgramId? ('Active program: '+ev.name) : 'No active program');
+      applyFilter();
+      toast(activeProgramId? ('Active program: '+ev.name) : 'All tracks');
     });
     list.appendChild(card);
   });
@@ -537,17 +543,18 @@ function newEvent(){
   const name=prompt('Program name (hal. Wedding, Birthday):');
   if(!name) return;
   const id=(crypto.randomUUID?crypto.randomUUID():Math.random().toString(36).slice(2));
-  dbPut('events',{id,name,trackIds:[]}).then(()=>{refreshEvents(); toast('Created program: '+name);});
+  dbPut('events',{id,name,trackIds:[]}).then(()=>{activeProgramId=id; refreshEvents(); applyFilter(); toast('Created program: '+name);});
 }
 function addToProgram(pid,tid){
   const ev=events.find(e=>e.id===pid);
   if(!ev) return;
   if(!ev.trackIds.includes(tid)) ev.trackIds.push(tid);
-  dbPut('events',ev).then(()=>{refreshEvents(); toast('Nadagdag sa '+ev.name);});
+  dbPut('events',ev).then(()=>{refreshEvents(); applyFilter(); toast('Nadagdag sa '+ev.name);});
 }
 function delProgram(id){
   if(!confirm('Delete this program?')) return;
-  dbDel('events',id).then(()=>{refreshEvents(); toast('Program deleted');});
+  if(activeProgramId===id) activeProgramId=null;
+  dbDel('events',id).then(()=>{refreshEvents(); applyFilter(); toast('Program deleted');});
 }
 function loadProgramToPads(id){
   const ev=events.find(e=>e.id===id);
