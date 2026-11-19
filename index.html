@@ -40,6 +40,9 @@
   .lib-row .dur{color:var(--muted);font-size:11px;}
   .lib-row .play{opacity:0;}
   .lib-row:hover .play{opacity:1;}
+  .lib-row .del{opacity:0;padding:2px 7px;line-height:1;color:var(--muted);}
+  .lib-row:hover .del{opacity:1;}
+  .lib-row .del:hover{color:#fff;background:var(--accent2);border-color:var(--accent2);}
   .lib-footer{padding:8px 12px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);display:flex;justify-content:space-between;align-items:center;}
   .program-list{flex:1;overflow:auto;padding:6px;display:flex;flex-direction:column;gap:6px;min-height:60px;}
   .prog-card{background:var(--panel2);border:1px solid var(--border);border-radius:8px;padding:8px;}
@@ -406,7 +409,7 @@ function renderLibrary(){
     row.draggable=true;
     row.dataset.id=t.id;
     const dur=isFinite(t.duration)? t.duration.toFixed(1)+'s':'--';
-    row.innerHTML=`<span class="name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span><span class="dur">${dur}</span><button class="play">▶</button>`;
+    row.innerHTML=`<span class="name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span><span class="dur">${dur}</span><button class="play">▶</button><button class="del" title="Delete from library">×</button>`;
     row.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',t.id);});
     row.addEventListener('click',e=>{
       if(e.target.classList.contains('play')) return;
@@ -418,6 +421,10 @@ function renderLibrary(){
       const deck=targetDeck;
       loadTrackToDeck(deck,t.id).then(()=>playDeck(deck));
     });
+    row.querySelector('.del').addEventListener('click',e=>{
+      e.stopPropagation();
+      deleteTrack(t.id);
+    });
     list.appendChild(row);
   });
   document.getElementById('libCount').textContent=tracks.length;
@@ -425,9 +432,44 @@ function renderLibrary(){
 }
 function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 
+async function deleteTrack(id){
+  const t=tracks.find(x=>x.id===id);
+  if(!t) return;
+  if(!confirm('Delete "'+t.name+'" sa library?\n\nMaalis din ito sa mga pad at program.')) return;
+  await dbDel('tracks',id);
+  await dbDel('audio',id);
+  audioCache.delete(id);
+  // remove pad assignments
+  for(const key of Object.keys(pads)){
+    if(pads[key]===id){ delete pads[key]; await dbDel('pads',key); }
+  }
+  // remove from programs
+  for(const ev of events){
+    if(ev.trackIds && ev.trackIds.includes(id)){
+      ev.trackIds=ev.trackIds.filter(x=>x!==id);
+      await dbPut('events',ev);
+    }
+  }
+  selectedTrackIds.delete(id);
+  // unload if loaded on a deck
+  ['A','B'].forEach(d=>{
+    if(decks[d].trackId===id){
+      const a=decks[d].audio;
+      a.pause(); a.removeAttribute('src'); a.load();
+      decks[d].trackId=null; decks[d].playing=false;
+      document.getElementById('name'+d).textContent='— no track —';
+      syncPlayBtn(d);
+    }
+  });
+  await refreshTracks();
+  await refreshEvents();
+  renderPads();
+  toast('Na-delete: '+t.name);
+}
+
 // ---------- Pads ----------
 function padKey(bank,index){return `${bank}_${index}`;}
-function allAssignedIds(){ return new Set([...Object.values(pads.A), ...Object.values(pads.B)]); }
+function allAssignedIds(){ return new Set(Object.values(pads)); }
 function isTrackAssigned(tid){ return allAssignedIds().has(tid); }
 function totalBanks(){
   const assigned=Math.max(0,...Object.keys(pads).map(k=>parseInt(k.split('_')[0])));
