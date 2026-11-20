@@ -479,7 +479,7 @@ function renderLibrary(){
         ? '<span class="inprog" title="Nasa program na">✓</span>'
         : '<button class="addp" title="Add sa program">+</button>';
     }
-    const delBtn=t.source==='server'?'':'<button class="del" title="Delete from library">×</button>';
+    const delBtn='<button class="del" title="'+(t.source==='server'?'Delete from server':'Delete from library')+'">×</button>';
     row.innerHTML=`<span class="name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span><span class="dur">${dur}</span>${addBtn}${delBtn}`;
     row.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',t.id);});
     row.addEventListener('click',e=>{
@@ -528,10 +528,20 @@ function escapeHtml(s){return s.replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','
 async function deleteTrack(id){
   const t=tracks.find(x=>x.id===id);
   if(!t) return;
-  if(!confirm('Delete "'+t.name+'" sa library?\n\nMaalis din ito sa mga pad at program.')) return;
-  await dbDel('tracks',id);
-  await dbDel('audio',id);
-  audioCache.delete(id);
+  const isServer=t.source==='server';
+  if(!confirm(isServer
+    ? 'Delete "'+t.name+'" SA SERVER?\n\nMawawala ito sa LAHAT ng device at hindi na maibabalik.'
+    : 'Delete "'+t.name+'" sa library?\n\nMaalis din ito sa mga pad at program.')) return;
+  if(isServer){
+    try{
+      const r=await fetch('/api/delete?name='+encodeURIComponent(id),{method:'DELETE'});
+      if(!r.ok) throw new Error('Server returned '+r.status);
+    }catch(e){ toast('Delete failed: '+e.message); return; }
+  }else{
+    await dbDel('tracks',id);
+    await dbDel('audio',id);
+    audioCache.delete(id);
+  }
   // remove pad assignments (lahat ng program)
   const allPadRows=await dbAll('pads');
   for(const r of allPadRows){
@@ -561,7 +571,7 @@ async function deleteTrack(id){
   await refreshTracks();
   await refreshEvents();
   renderPads();
-  toast('Na-delete: '+t.name);
+  toast(isServer?('Na-delete sa server: '+t.name):('Na-delete: '+t.name));
 }
 
 // ---------- Pads ----------

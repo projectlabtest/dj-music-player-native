@@ -55,7 +55,7 @@ Hindi na kailangang mag-load ng file sa bawat device.
 ## Importanteng tandaan
 
 - **Sa device pa rin lumalabas ang tunog**, kahit nasa server ang music.
-- Ang mga server tracks ay **hindi na-de-delete** mula sa app (papatayin mo sa server kapag tinanggal mo ang file).
+- Ang mga server tracks ay **may × delete button** sa app; ide-delete nito ang file mismo sa server (LAN-only endpoint) at mawawala sa lahat ng device.
 - Ang **programs at pad assignments** ay nasa IndexedDB pa rin ng bawat device — hindi pa shared.
   Pero ang **track IDs ay pangalan ng file**, kaya stable kahit mag-restart ang server.
 - Local file loading (Load Files / Load Folder) ay available pa rin at idinadagdag sa list.
