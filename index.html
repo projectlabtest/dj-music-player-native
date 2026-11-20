@@ -278,6 +278,7 @@ function dbClear(store){return new Promise((res,rej)=>{const r=tx(store,'readwri
 
 // ---------- State ----------
 let tracks=[]; // metadata
+let serverMode=false; // true kapag naka-load ang UI mula sa web server
 const audioCache=new Map(); // id -> Blob
 let pads={}; // key -> trackId (mirrored for A and B)
 let currentBank=0;
@@ -356,13 +357,20 @@ async function loadTrackToDeck(d, trackId){
   ensureAudioCtx();
   const track=tracks.find(t=>t.id===trackId);
   if(!track) return;
-  let blob=audioCache.get(trackId);
-  if(!blob){ const rec=await dbGet('audio',trackId); blob=rec?.blob; if(blob) audioCache.set(trackId,blob);}
-  if(!blob){ toast('Audio not found'); return;}
   const deck=decks[d];
-  if(deck.url) URL.revokeObjectURL(deck.url);
-  const url=URL.createObjectURL(blob);
-  deck.url=url; deck.trackId=trackId;
+  if(deck.url){ URL.revokeObjectURL(deck.url); deck.url=null; }
+  let url;
+  if(track.source==='server' && track.url){
+    // audio mula sa server (same-origin) — hindi kailangang i-download buong file
+    url=new URL(track.url,location.href).href;
+  }else{
+    let blob=audioCache.get(trackId);
+    if(!blob){ const rec=await dbGet('audio',trackId); blob=rec?.blob; if(blob) audioCache.set(trackId,blob);}
+    if(!blob){ toast('Audio not found'); return;}
+    url=URL.createObjectURL(blob);
+    deck.url=url;
+  }
+  deck.trackId=trackId;
   deck.audio.src=url;
   deck.audio.load();
   document.getElementById('name'+d).textContent=track.name;
@@ -415,7 +423,25 @@ function cueDeck(d){ const a=decks[d].audio; a.pause(); a.currentTime=0; decks[d
 
 // ---------- Library ----------
 async function refreshTracks(){
-  tracks=await dbAll('tracks');
+  const local=await dbAll('tracks');
+  if(location.protocol==='http:'||location.protocol==='https:'){
+    try{
+      const r=await fetch('/api/tracks',{cache:'no-store'});
+      if(r.ok){
+        const list=await r.json();
+        serverMode=true;
+        tracks=list.map(t=>({
+          id:t.id, name:t.name, size:t.size, duration:t.duration,
+          type:t.type, url:t.url, source:'server', addedAt:Date.now()
+        })).concat(local);
+        tracks.sort((a,b)=>a.name.localeCompare(b.name));
+        applyFilter();
+        return;
+      }
+    }catch(e){ /* hindi abot ang API → gamitin ang local library */ }
+    serverMode=false;
+  }
+  tracks=local;
   tracks.sort((a,b)=>a.name.localeCompare(b.name));
   applyFilter();
 }
@@ -453,14 +479,16 @@ function renderLibrary(){
         ? '<span class="inprog" title="Nasa program na">✓</span>'
         : '<button class="addp" title="Add sa program">+</button>';
     }
-    row.innerHTML=`<span class="name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span><span class="dur">${dur}</span>${addBtn}<button class="del" title="Delete from library">×</button>`;
+    const delBtn=t.source==='server'?'':'<button class="del" title="Delete from library">×</button>';
+    row.innerHTML=`<span class="name" title="${escapeHtml(t.name)}">${escapeHtml(t.name)}</span><span class="dur">${dur}</span>${addBtn}${delBtn}`;
     row.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',t.id);});
     row.addEventListener('click',e=>{
       if(e.target.classList.contains('del')||e.target.classList.contains('addp')) return;
       if(selectedTrackIds.has(t.id)) selectedTrackIds.delete(t.id); else selectedTrackIds.add(t.id);
       row.classList.toggle('selected');
     });
-    row.querySelector('.del').addEventListener('click',e=>{
+    const del=row.querySelector('.del');
+    if(del) del.addEventListener('click',e=>{
       e.stopPropagation();
       deleteTrack(t.id);
     });
@@ -930,6 +958,7 @@ async function init(){
   pads={};
   // settings
   await refreshTracks();
+  if(serverMode) setStatus('Server library: '+tracks.filter(t=>t.source==='server').length+' tracks');
   await refreshEvents();
   renderBankSelect();
   renderPads();
@@ -978,8 +1007,10 @@ async function init(){
     pads={}; tracks=[]; filteredTracks=[]; events=[]; selectedTrackIds.clear();
     activeProgramId=null; setAddMode(false);
     renderPrograms();
-    renderLibrary(); renderPads();
-    toast('Library cleared');
+    await refreshTracks();
+    await refreshEvents();
+    renderPads();
+    toast(serverMode?'Local library cleared — server tracks remain':'Library cleared');
   });
   // deck controls
   ['A','B'].forEach(d=>{
